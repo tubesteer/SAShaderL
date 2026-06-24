@@ -13,7 +13,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
@@ -23,8 +22,14 @@ jobs:
       run: |
         curl -L -O https://github.com/RusJJ/AndroidModLoader/archive/refs/heads/main.zip
         unzip main.zip
-        mv ./AndroidModLoader-main/mod ./mod
+        # Pastikan isi template dipindah ke folder yang benar
+        cp -r AndroidModLoader-main/mod/* .
           
+    - name: Get GTA:SA structures file
+      run: |
+        git clone https://github.com/RusJJ/GTASAAndroid_Structs.git ./structs
+        cp -r ./structs/* ./
+
     - name: Install Android NDK (r24)
       uses: nttld/setup-ndk@v1.2.0
       with:
@@ -32,7 +37,9 @@ jobs:
         local-cache: true
 
     - name: Build the code
-      run: ndk-build NDK_PROJECT_PATH=. APP_BUILD_SCRIPT=./Android.mk NDK_APPLICATION_MK=./Application.mk
+      run: |
+        # Pastikan Android.mk ada di root atau sesuaikan path-nya
+        ndk-build NDK_PROJECT_PATH=. APP_BUILD_SCRIPT=./Android.mk NDK_APPLICATION_MK=./Application.mk
 
     - name: Upload the mod!
       uses: actions/upload-artifact@v4

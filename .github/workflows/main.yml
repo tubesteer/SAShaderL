@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [ "main" ]
 
+# Menambahkan blok permissions di sini
+permissions:
+  contents: read
+  actions: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -21,6 +26,11 @@ jobs:
       with:
         ssh-private-key: |
           ${{ secrets.SSH }}
+
+    # Menambahkan konfigurasi agar SSH dikenal saat clone
+    - name: Configure Git SSH
+      run: |
+        ssh-keyscan github.com >> ~/.ssh/known_hosts
 
     - name: Download AndroidModLoader`s mod template...
       uses: wei/wget@v1

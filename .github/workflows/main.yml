@@ -19,30 +19,17 @@ jobs:
       with:
         submodules: recursive
         
-    - name: Setup SSH keys
-      uses: webfactory/ssh-agent@v0.9.0
-      with:
-        ssh-private-key: |
-          ${{ secrets.SSH }}
-
-    - name: Configure Git SSH
-      run: |
-        ssh-keyscan github.com >> ~/.ssh/known_hosts
-
     - name: Download AndroidModLoader's mod template
-      uses: wei/wget@v1
-      with:
-        args: -O ./AML_src.zip https://github.com/RusJJ/AndroidModLoader/archive/refs/heads/main.zip
-
-    - name: Install AndroidModLoader's mod template
       run: |
-        unzip ./AML_src.zip
+        curl -L -O https://github.com/RusJJ/AndroidModLoader/archive/refs/heads/main.zip
+        unzip main.zip
         mv ./AndroidModLoader-main/mod ./mod
           
-    - name: Get GTA:SA structures file (private)
+    - name: Get GTA:SA structures file
       run: |
-        git clone ssh://git@github.com/RusJJ/GTASAAndroid_Structs.git ./structs
-        mv ./structs/* ./
+        # Menggunakan HTTPS untuk clone, pastikan repo ini bersifat public
+        git clone https://github.com/RusJJ/GTASAAndroid_Structs.git ./structs
+        cp -r ./structs/* ./
 
     - name: Install Android NDK (r24)
       uses: nttld/setup-ndk@v1.2.0

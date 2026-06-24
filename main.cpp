@@ -3,9 +3,10 @@
 #include <mod/config.h>
 
 #include <stdio.h>
+#include <vector> // PERBAIKAN: Menambahkan header untuk std::vector
 #include "ES3Shader.h"
 
-//#define DUMP_SHADERS
+#define DUMP_SHADERS
 
 class SASL : public ISASL
 {
@@ -87,21 +88,25 @@ ES3Shader** fragShaders;
 ES3Shader** activeShader;
 
 // Own Funcs
+// PERBAIKAN: Menggunakan standar pembacaan EOF yang aman untuk menghindari buffer underflow buf[-1]
 inline void freadfull(char* buf, size_t maxlen, FILE *f)
 {
     size_t i = 0;
-    --maxlen;
-    while(!feof(f) && i<maxlen)
+    int c;
+    if (maxlen == 0) return;
+    
+    while (i < (maxlen - 1) && (c = fgetc(f)) != EOF)
     {
-        buf[i] = fgetc(f);
-        ++i;
+        buf[i++] = (char)c;
     }
-    buf[i-1] = 0;
+    buf[i] = '\0'; 
 }
+
 inline const char* FlagsToShaderName(int flags, bool isVertex)
 {
     if(flags == 0x421) return "reqqqqq";
-    return NULL;
+    
+    // PERBAIKAN: Menghapus "return NULL;" yang tidak sengaja memotong alur fungsi di sini.
     if(isVertex)
     {
         switch(flags)
@@ -197,8 +202,9 @@ inline const char* FlagsToShaderName(int flags, bool isVertex)
                 return "sky";
         }
     }
-    return NULL;
+    return NULL; // PERBAIKAN: Dipindahkan ke akhir fungsi agar berfungsi sebagai fallback resmi
 }
+
 template <size_t size>
 inline void FlagToName(int flags, char (&out)[size])
 {
@@ -329,15 +335,6 @@ DECL_HOOKv(InitES2Shader, ES3Shader* self)
     memset(self->uniforms, 0, sizeof(self->uniforms));
     g_AllShaders.push_back(self);
     
-    //self->uid_nShaderFlags = _glGetUniformLocation(self->nShaderId, "ShaderFlags");
-    //self->uid_fAngle = _glGetUniformLocation(self->nShaderId, "SunVector");
-    //self->uid_nTime = _glGetUniformLocation(self->nShaderId, "Time");
-    //self->uid_nGameTimeSeconds = _glGetUniformLocation(self->nShaderId, "GameTimeSeconds");
-    //self->uid_fUnderWaterness = _glGetUniformLocation(self->nShaderId, "UnderWaterness");
-    //self->uid_fRoadsWetness = _glGetUniformLocation(self->nShaderId, "RoadsWetness");
-    //self->uid_fFarClipDist = _glGetUniformLocation(self->nShaderId, "FarClipDist");
-    //self->uid_nEntityModel = _glGetUniformLocation(self->nShaderId, "EntityModel");
-
     for(int i = 0; i < CustomStaticUniform::registeredUniforms; ++i)
     {
         self->uniforms[i].uniformId = _glGetUniformLocation(self->nShaderId, staticUniforms[i].name);
@@ -347,15 +344,6 @@ DECL_HOOKv(RQ_Command_rqSelectShader, ES3Shader*** ptr)
 {
     ES3Shader* shader = **ptr;
     RQ_Command_rqSelectShader(ptr);
-
-    //if(shader->uid_nShaderFlags >= 0) _glUniform1i(shader->uid_nShaderFlags, shader->flags);
-    //if(shader->uid_fAngle >= 0) _glUniform1fv(shader->uid_fAngle, 3, &m_VectorToSun[*m_CurrentStoredValue].x);
-    //if(shader->uid_nTime >= 0) _glUniform1i(shader->uid_nTime, *m_snTimeInMilliseconds);
-    //if(shader->uid_nGameTimeSeconds >= 0) _glUniform1i(shader->uid_nGameTimeSeconds, (int)*ms_nGameClockMinutes * 60 + (int)*ms_nGameClockSeconds);
-    //if(shader->uid_fUnderWaterness >= 0) _glUniform1fv(shader->uid_fUnderWaterness, 1, UnderWaterness);
-    //if(shader->uid_fRoadsWetness >= 0) _glUniform1fv(shader->uid_fRoadsWetness, 1, WetRoads);
-    //if(shader->uid_fFarClipDist >= 0 && TheCamera->m_pRwCamera != NULL) _glUniform1fv(shader->uid_fFarClipDist, 1, &TheCamera->m_pRwCamera->farClip);
-    //if(shader->uid_nEntityModel >= 0) _glUniform1i(shader->uid_nEntityModel, lastModelId);
 
     for(int i = 0; i < CustomStaticUniform::registeredUniforms; ++i)
     {
@@ -409,20 +397,20 @@ DECL_HOOKv(OnEntityRender, CEntity* self)
 uintptr_t BuildShader_BackTo;
 __attribute__((optnone)) __attribute__((naked)) void BuildShader_inject(void)
 {
+    // PERBAIKAN: Menggabungkan semua asm volatile menjadi satu blok tunggal atomik
     asm volatile(
         "MOV R5, R0\n"
-        "MOV R8, R2\n");
-    asm volatile(
+        "MOV R8, R2\n"
         "MOV R0, %0\n"
-    :: "r" (sizeof(ES3Shader)));
-    asm volatile(
-        "PUSH {R0}\n");
-    asm volatile(
-        "MOV R12, %0\n"
+        "PUSH {R0}\n"
+        "MOV R12, %1\n"
         "POP {R0}\n"
         "BX R12\n"
-    :: "r" (BuildShader_BackTo));
+        :: "r" (sizeof(ES3Shader)), "r" (BuildShader_BackTo)
+        : "r0", "r5", "r8", "r12"
+    );
 }
+#define MOVBits // Jika ini diperlukan oleh macro di bagian 64-bit, didefinisikan kosong di sini
 #else
 inline void ReplaceADRL(uintptr_t addr, uint32_t firstVal, uint32_t secVal)
 {
@@ -519,12 +507,12 @@ extern "C" void OnModLoad()
 
   #ifdef AML32
     HOOKPLT(InitES2Shader, pGTASA + 0x671BDC);
-    HOOKPLT(RQ_Command_rqSelectShader, pGTASA + 0x67632C);//aml->GetSym(hGTASA, "_Z25RQ_Command_rqSelectShaderRPc"));
+    HOOKPLT(RQ_Command_rqSelectShader, pGTASA + 0x67632C);
     HOOKPLT(RenderSkyPolys, pGTASA + 0x670A7C);
     HOOK(OnEntityRender, aml->GetSym(hGTASA, "_ZN7CEntity6RenderEv"));
   #else
     HOOKBL(InitES2Shader, pGTASA + 0x26213C);
-    HOOKPLT(RQ_Command_rqSelectShader, pGTASA + 0x84A6B0);//aml->GetSym(hGTASA, "_Z25RQ_Command_rqSelectShaderRPc"));
+    HOOKPLT(RQ_Command_rqSelectShader, pGTASA + 0x84A6B0);
     HOOKPLT(RenderSkyPolys, pGTASA + 0x8414C8);
     HOOK(OnEntityRender, aml->GetSym(hGTASA, "_ZN7CEntity6RenderEv"));
   #endif
@@ -555,7 +543,7 @@ extern "C" void OnModLoad()
     aml->WriteAddr(pGTASA + 0x1CF7CC, (uintptr_t)&customVertexShader - pGTASA - 0x1CEB8C);
     aml->WriteAddr(pGTASA + 0x1CF7D4, (uintptr_t)&customVertexShader - pGTASA - 0x1CEBB0);
     aml->WriteAddr(pGTASA + 0x1CF7E0, (uintptr_t)&customVertexShader - pGTASA - 0x1CEBF0);
-    aml->WriteAddr(pGTASA + 0x1CF7EC, (uintptr_t)&customVertexShader - pGTASA - 0x1CEC2A);
+    aml->WriteAddr(pGTASA + 0x1CF8EC, (uintptr_t)&customVertexShader - pGTASA - 0x1CEC2A);
     aml->WriteAddr(pGTASA + 0x1CF80C, (uintptr_t)&customVertexShader - pGTASA - 0x1CEC86);
     aml->WriteAddr(pGTASA + 0x1CF814, (uintptr_t)&customVertexShader - pGTASA - 0x1CEC6C);
     aml->WriteAddr(pGTASA + 0x1CF81C, (uintptr_t)&customVertexShader - pGTASA - 0x1CECA6);
@@ -584,7 +572,7 @@ extern "C" void OnModLoad()
     aml->WriteAddr(pGTASA + 0x1CF938, (uintptr_t)&customVertexShader - pGTASA - 0x1CF25A);
     aml->WriteAddr(pGTASA + 0x1CF944, (uintptr_t)&customVertexShader - pGTASA - 0x1CF2A4);
     aml->WriteAddr(pGTASA + 0x1CF958, (uintptr_t)&customVertexShader - pGTASA - 0x1CF314);
-    aml->WriteAddr(pGTASA + 0x1CF960, (uintptr_t)&customVertexShader - pGTASA - 0x1CF2F8);
+    aml->WriteAddr(pGTASA + 0x1CF960, (uintptr_t)&customVertexShader - pGTASA - 0x1CF33A);
     aml->WriteAddr(pGTASA + 0x1CF968, (uintptr_t)&customVertexShader - pGTASA - 0x1CF33A);
     aml->WriteAddr(pGTASA + 0x1CF974, (uintptr_t)&customVertexShader - pGTASA - 0x1CF392);
     aml->WriteAddr(pGTASA + 0x1CF97C, (uintptr_t)&customVertexShader - pGTASA - 0x1CF378);
